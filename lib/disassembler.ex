@@ -101,88 +101,159 @@ defmodule Disassembler do
       "f0" => "THROW",
       "f1" => "THROWIFNOT"
     };
-    # TODO add more extended opcodes
+
+    # TODO programmatically extende the 2..74 hex numbers of the opcodes
     @extended_opcodes %{
       "62" => 3,
       "63" => 3,
-      "64" => 3
+      "64" => 3,
+      "02" => 3,
+      "03" => 4,
+      "04" => 5,
+      "05" => 6,
+      "06" => 7,
+      "07" => 8,
+      "08" => 9,
+      "09" => 10,
+      "0a" => 11,
+      "0b" => 12,
+      "0c" => 13,
+      "0d" => 14,
+      "0e" => 15,
+      "0f" => 16,
+      "10" => 17,
+      "11" => 18,
+      "12" => 19,
+      "13" => 20,
+      "14" => 21,
+      "15" => 22,
+      "16" => 23,
+      "17" => 24,
+      "18" => 25,
+      "19" => 26,
+      "1a" => 27,
+      "1b" => 28,
+      "1c" => 29,
+      "1d" => 30,
+      "1e" => 31,
+      "1f" => 32,
+      "20" => 33,
+      "21" => 34,
+      "22" => 35,
+      "23" => 36,
+      "24" => 37,
+      "25" => 38,
+      "26" => 39,
+      "27" => 40,
+      "28" => 41,
+      "29" => 42,
+      "2a" => 43,
+      "2b" => 44,
+      "2c" => 45,
+      "2d" => 46,
+      "2e" => 47,
+      "2f" => 48,
+      "30" => 49,
+      "31" => 50,
+      "32" => 51,
+      "33" => 52,
+      "34" => 53,
+      "35" => 54,
+      "36" => 55,
+      "37" => 56,
+      "38" => 57,
+      "39" => 58,
+      "3a" => 59,
+      "3b" => 60,
+      "3c" => 61,
+      "3d" => 62,
+      "3e" => 63,
+      "3f" => 64,
+      "40" => 65,
+      "41" => 66,
+      "42" => 67,
+      "43" => 68,
+      "44" => 69,
+      "45" => 70,
+      "46" => 71,
+      "47" => 72,
+      "48" => 73,
+      "49" => 74,
+      "4a" => 75
     }
 
   # see example https://neotracker.io/contract/ce3a97d7cfaa770a5e51c5b12cd1d015fbb5f87d
   def parse_script(hex_string) do
-      hex_string
-      |> String.codepoints
-      |> Enum.chunk(2)
-      |> Enum.map(&Enum.join/1)
-      |> make_list
-      |> Enum.with_index
-      |> IO.inspect
-      |> Enum.reduce("", fn({code, index}, acc) ->
-        cond do
-          Map.has_key?(@opcodes_list, code) and String.length(code) == 2 ->
-            acc <> to_string(index) <> ": " <> @opcodes_list[code] <> "\n"
-          String.length(code) == 2 ->
-            {bytes, _} = Integer.parse(code, 16)
-            acc <> to_string(index) <> ": PUSHBYTES" <> to_string(bytes) <> "\n"
-          true ->
-            # TODO parse instruction lengths on certain opcodes here
-            opcode_key = String.slice(code, 0..1)
-            args = String.slice(code, 2..-1)
-            acc <> to_string(index) <> ": " <> @opcodes_list[opcode_key] <> " " <> args <>  "\n"
-        end
-      end)
-  end
-
-  defp make_list(initial_list) do
-    Enum.reduce(@extended_opcodes, initial_list, fn({opcode, repeat_value}, acc_list) ->
-      case Enum.split_while(acc_list, fn(list_item) -> list_item != opcode end) do
-        {_, []} ->
-          acc_list
-        {pre_opcode_match, non_empty_list} ->
-          {opcodes_to_be_joined, remaining_list} = Enum.split(non_empty_list, repeat_value)
-          joined_item = Enum.join(opcodes_to_be_joined)
-          pre_opcode_match ++ [joined_item | remaining_list]
+    hex_string
+    |> String.codepoints
+    |> Enum.chunk(2)
+    |> Enum.map(&Enum.join/1)
+    |> make_list
+    |> Enum.with_index
+    |> Enum.reduce("", fn({code, index}, acc) ->
+      cond do
+        Map.has_key?(@opcodes_list, code) and String.length(code) == 2 ->
+          acc <> to_string(index) <> ": " <> @opcodes_list[code] <> "\n"
+        true ->
+          opcode_key = String.slice(code, 0..1)
+          args = String.slice(code, 2..-1)
+          {opcode_keyword, push_bytes} =
+            case Map.fetch(@opcodes_list, opcode_key) do
+              {:ok, keyword} -> { keyword, "" }
+              :error -> check_hex_num(opcode_key)
+            end
+          if (push_bytes == "PUSHBYTES"), do: args = "0x" <> args
+          if (opcode_key == "62" or opcode_key == "63" or opcode_key == "64"), do: args = get_jmp_num(args)
+          acc <> to_string(index) <> ": " <> push_bytes <> opcode_keyword <> " " <> args <>  "\n"
       end
     end)
   end
 
-  defp parse_instruction_lengths do
-    # I think this is the last step to parse the instruction lengths for certain opcodes
+  defp get_jmp_num(args) do
+    switch_args = String.slice(args, 2..-1) <> String.slice(args, 0..1)
+    {jmp_num, ""} = Integer.parse(switch_args, 16)
+    to_string(jmp_num)
   end
 
+  defp check_hex_num(str) do
+    case Integer.parse(str, 16) do
+      {num, _} -> if (num > 1 and num < 75), do: {to_string(num), "PUSHBYTES"}, else: {"parsing error", ""}
+      :error -> {"parsing error", ""}
+    end
+  end
 
-  # TODO remove this code when finished - its not going to be used but keeping it in case we need
-  # to work with bitstrings for some reason
-  # def verification(hex_string) do
-  #   case Base.decode16(hex_string, case: :lower) do
-  #     :error -> IO.puts("error")
-  #     {:ok, result} ->
-  #       IO.puts("success")
-  #       IO.inspect(result)
-  #       <<b :: size(8), bits :: bitstring>> = result
-  #       first_args = String.slice(hex_string, 2..67)
-  #       optext = "0: PUSHBYTES" <> to_string(b) <> " 0x" <> first_args
-  #       IO.inspect(optext)
-  #       remaining_string = String.slice(hex_string, 68..-1)
-  #       if (remaining_string == "ac"), do: IO.puts("1: CHECKSIG")
-  #   end
-  # end
+  defp make_list(initial_list) do
+    list_length = length(initial_list)
+    initial_list
+    |> Enum.reduce({initial_list, []}, fn(current, {remaining, acc}) ->
+      remaining_head =
+        case length(remaining) do
+          0 -> nil
+          _ -> hd(remaining)
+        end
+      with true <- remaining_head == current,
+        {:ok, joins} <- Map.fetch(@extended_opcodes, current) do
+          {opcodes_to_be_joined, new_remaining} = Enum.split(remaining, joins)
+          joined_item = Enum.join(opcodes_to_be_joined)
+          {new_remaining, [joined_item | acc]}
+      else
+        :error -> {tl(remaining), [current | acc]}
+        false -> {remaining, acc}
+      end
+    end)
+    |> elem(1)
+    |> Enum.reverse()
+  end
 
-  # def invocation(hex_string) do
-  #   case Base.decode16(hex_string, case: :lower) do # is there a need to handle different encodings?
-  #     :error -> IO.puts("error") # Figure out how to handle error later
-  #     {:ok, result} ->
-  #       string_results_list = for <<byte::8 <- result>>, do: Integer.to_string(byte, 16)
-  #       str = string_results_list
-  #         |> Enum.map(fn(result_item) ->
-  #           cond do
-  #             result_item == "0" -> "00"
-  #             true -> result_item
-  #           end
-  #         end)
-  #         |> Enum.join()
-  #       IO.inspect str
-  #       parse_script(str)
+  # TODO write a function that extends the code the right amount if it is not in the extends list but falls between 1 and 74
+  # defp extend_the_opcode(current) do
+  #   case Map.fetch(@extended_opcodes, current) do
+  #     {:ok, extend_amount} -> {:ok, extend_amount}
+  #     :error ->
+  #       case check_hex_num(current) do
+  #         {num, _} -> {:ok, Integernum + 1}
+  #         :error -> :error
+  #       end
   #   end
   # end
 end
