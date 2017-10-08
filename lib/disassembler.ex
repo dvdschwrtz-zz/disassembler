@@ -223,7 +223,6 @@ defmodule Disassembler do
   end
 
   defp make_list(initial_list) do
-    list_length = length(initial_list)
     initial_list
     |> Enum.reduce({initial_list, []}, fn(current, {remaining, acc}) ->
       remaining_head =
